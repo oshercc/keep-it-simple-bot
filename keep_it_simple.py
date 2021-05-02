@@ -6,6 +6,9 @@ from slack_bolt.adapter.socket_mode import SocketModeHandler
 
 app = App(token=os.environ.get("SLACK_BOT_TOKEN"))
 
+MANAGER = os.environ.get("MANAGER", "the manager")
+MAX_MESSAGE_LEN = os.environ.get("MAX_MESSAGE_LEN", CONSTS.MAX_MESSAGE_LEN)
+
 # Check liveness
 @app.event("app_mention")
 def event_test(say):
@@ -19,7 +22,7 @@ def make_it_short(client, message):
         result = client.chat_postMessage(
             channel=channel_id,
             thread_ts=message["ts"],
-            text=CONSTS.MAX_MESSAGE_COMMENT.format(max_message_len=CONSTS.MAX_MESSAGE_LEN, message_len=message_len)
+            text=CONSTS.MAX_MESSAGE_COMMENT.format(max_message_len=CONSTS.MAX_MESSAGE_LEN, message_len=message_len, manager=MANAGER)
         )
 
 if __name__ == "__main__":
