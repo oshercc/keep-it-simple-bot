@@ -12,6 +12,8 @@ MANAGER = os.environ.get("MANAGER", "the manager")
 MAX_MESSAGE_LEN = os.environ.get("MAX_MESSAGE_LEN", CONSTS.MAX_MESSAGE_LEN)
 
 JIRA_SERVER = "https://issues.redhat.com"
+JIRA_TICKET_TEMPLATE = "https://issues.redhat.com/browse/{issue_key}"
+
 jira_creds = os.environ.get("JIRA_CREDS", None)
 if jira_creds:
     jira_user, jira_pass = jira_creds.split(":")
@@ -33,6 +35,8 @@ def make_it_short(client, message):
 
 
 def keep_it_short(channel_id, client, message):
+    if "text" not in message:
+        return
     if message["channel_type"] in ["group", "channel"] and "thread_ts" not in message and len(
             message["text"]) > CONSTS.MAX_MESSAGE_LEN:
         message_len = len(message["text"])
@@ -44,25 +48,45 @@ def keep_it_short(channel_id, client, message):
         )
 
 
+
 def enrich_jira_mention(channel_id, client, message):
     if not jira_user:
         return
+    if "text" not in message:
+        return
+
     jira_links = re.findall("<https:\/\/issues\.redhat\.com\/browse\/MGMT-.*?>", message["text"])
-    if not jira_links:
+
+    jira_mention = re.findall("(?:^|\s)(?:MGMT|mgmt)-[1-9]{4,}", message["text"])
+
+    if not jira_links and not jira_mention:
         return
     new_message = message["text"]
+
     for link in jira_links:
-        ticket_description = get_jira_info(link)
+        ticket_key = re.findall("MGMT-.*[1-9]", link)[0]
+        ticket_description = get_jira_info(ticket_key)
         link_with_description = f"{link} \n> :jira: {ticket_description}\n"
         new_message = new_message.replace(link, link_with_description)
+
+    for mention in jira_mention:
+        try:
+            ticket_key = mention.upper().strip()
+            ticket_description = get_jira_info(ticket_key)
+            link = JIRA_TICKET_TEMPLATE.format(issue_key=ticket_key)
+            link_with_description = f"{link} \n> :jira: {ticket_description}\n"
+            new_message = new_message.replace(mention, link_with_description)
+        except Exception as ex:
+            print(ex)
+            continue
+
     client.chat_update(
         text=new_message,
         channel=channel_id,
         ts=message["ts"]
     )
 
-def get_jira_info(ticket):
-    ticket_key = re.findall("MGMT-.*[1-9]",ticket)[0]
+def get_jira_info(ticket_key):
     issue = jira_client.search_issues(f"key={ticket_key}")[0]
     title = issue.raw['fields']['summary']
     return title
