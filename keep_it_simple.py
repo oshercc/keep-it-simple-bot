@@ -29,17 +29,22 @@ def event_test(say):
 
 @app.event("message")
 def make_it_short(client, message):
+
+    if "text" not in message:
+        return
+
+    print(f"Got message {message['text']}")
+
     channel_id = message["channel"]
     keep_it_short(channel_id, client, message)
     enrich_jira_mention(channel_id, client, message)
 
 
 def keep_it_short(channel_id, client, message):
-    if "text" not in message:
-        return
-    if message["channel_type"] in ["group", "channel"] and "thread_ts" not in message and len(
-            message["text"]) > CONSTS.MAX_MESSAGE_LEN:
-        message_len = len(message["text"])
+    message_len = len(message["text"])
+    if message["channel_type"] in ["group", "channel"] and "thread_ts" not in message and message_len > CONSTS.MAX_MESSAGE_LEN:
+        print("Message is too long, informing user")
+
         result = client.chat_postMessage(
             channel=channel_id,
             thread_ts=message["ts"],
@@ -50,17 +55,19 @@ def keep_it_short(channel_id, client, message):
 
 
 def enrich_jira_mention(channel_id, client, message):
+    print("Checking message for enrichment")
     if not jira_user:
-        return
-    if "text" not in message:
         return
 
     jira_links = re.findall("<https:\/\/issues\.redhat\.com\/browse\/MGMT-.*?>", message["text"])
 
     jira_mention = re.findall("(?:^|\s)(?:MGMT|mgmt)-[1-9]{4,}", message["text"])
 
+    print(f"Message jira links: {jira_links+jira_mention}")
+
     if not jira_links and not jira_mention:
         return
+
     new_message = message["text"]
 
     for link in jira_links:
